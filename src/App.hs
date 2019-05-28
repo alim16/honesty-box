@@ -1,90 +1,110 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, DataKinds,
+  DeriveGeneric, TypeOperators #-}
 
 module App where
 
-import           Data.Aeson
-import           GHC.Generics
-import           Network.Wai
-import           Network.Wai.Handler.Warp
-import           Servant
-import           System.IO
-import           Control.Monad.IO.Class
-import qualified Data.ByteString.Lazy as BL
-import           Data.ByteString.Internal
+import Data.Aeson
+import GHC.Generics
+import Data.Proxy
+import System.IO
+import Network.HTTP.Client (newManager, defaultManagerSettings)
+import Network.Wai.Handler.Warp
+import Servant as S
+import Servant.Client
+import Servant.Auth as SA
+import Servant.Auth.Server as SAS
+import Control.Monad.IO.Class (liftIO)
+import Data.Map as M
+import Data.ByteString (ByteString)
 
--- * api
+port :: Int
+port = 3001
 
-type ItemApi =
-  "item" :> Get '[JSON] Item :<|>
-  "item" :> ReqBody '[JSON] Item :> Post '[JSON] String
-  -- "item" :> Capture "itemId" Integer :> Get '[JSON] Item
+-----
 
-itemApi :: Proxy ItemApi
-itemApi = Proxy
+data AuthenticatedUser = AUser { auID :: Int
+                               , auOrgID :: Int
+                               } deriving (Show, Generic)
+
+instance ToJSON AuthenticatedUser
+instance FromJSON AuthenticatedUser
+instance ToJWT AuthenticatedUser
+instance FromJWT AuthenticatedUser
+
+-----
+
+type Login      = ByteString
+type Password   = ByteString
+type DB         = Map (Login, Password) AuthenticatedUser
+type Connection = DB
+type Pool a     = a
+
+initConnPool :: IO (Pool Connection)
+initConnPool = pure $ fromList [ (("user", "pass"), AUser 1 1)
+                               , (("user2", "pass2"), AUser 2 1) ]
+
+authCheck :: Pool Connection
+          -> BasicAuthData
+          -> IO (AuthResult AuthenticatedUser)
+authCheck connPool (BasicAuthData login password) = pure $
+    maybe SAS.Indefinite Authenticated $ M.lookup (login, password) connPool
+
+type instance BasicAuthCfg = BasicAuthData -> IO (AuthResult AuthenticatedUser)
+
+instance FromBasicAuthData AuthenticatedUser where
+    fromBasicAuthData authData authCheckFunction = authCheckFunction authData
 
 
---post example that worked (json was encoded Item)
--- curl -d '{"itemId":1,"itemText":"some text"}' -H "Content-Type: application/json" -X POST http://localhost:3000/item
+-----
 
--- * app
+type TestAPI = "foo" :> Capture "i" Int :> Get '[JSON] ()
+               :<|> "bar" :> Get '[JSON] String
+
+type TestAPIServer =
+    Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> TestAPI
+
+type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> TestAPI
+
+----Client
+testClient :: IO ()
+testClient = do
+  mgr <- newManager defaultManagerSettings
+  let (foo :<|> _) = client (Proxy :: Proxy TestAPIClient)
+                     (BasicAuthData "name" "pass")
+  res <- runClientM (foo 42)
+    (mkClientEnv mgr (BaseUrl Http "localhost" port ""))
+  hPutStrLn stderr $ case res of
+    Left err -> "Error: " ++ show err
+    Right r -> "Success: " ++ show r
+
+
+---Server
+server :: Server TestAPIServer
+server (Authenticated user) = handleFoo :<|> handleBar
+  where
+    handleFoo :: Int -> Handler ()
+    handleFoo n = liftIO $ hPutStrLn stderr $
+      concat ["foo: ", show user, " / ", show n]
+    handleBar :: Handler String
+    handleBar = return ("hello " ++ (show user)) --testClient
+server _ = throwAll err401
+
+------
+mkApp :: Pool Connection -> IO Application
+mkApp connPool = do
+  myKey <- generateKey
+  let jwtCfg = defaultJWTSettings myKey
+      authCfg = authCheck connPool
+      cfg = jwtCfg :. defaultCookieSettings :. authCfg :. EmptyContext
+      api = Proxy :: Proxy TestAPIServer
+  pure $ serveWithContext api cfg server
+
+
 run :: IO ()
 run = do
-  let port = 4000
-      settings =
-        setPort port $
-        setBeforeMainLoop (hPutStrLn stderr ("listening on port " ++ show port)) $
-        defaultSettings
-  runSettings settings =<< mkApp
-
-mkApp :: IO Application
-mkApp = return $ serve itemApi server
-
-server :: Server ItemApi
-server =
-  -- getItems :<|>
-  -- getItemById
-  getItems :<|> postItem
-
-getItems :: Handler Item
-getItems = do
-  text <- liftIO readItemFromFile
-  case text of
-    Just x -> return $ x
-    Nothing -> return $ Item 0 "no value"
-
-postItem :: Item -> Handler String
-postItem item = do
-  liftIO $ BL.writeFile "/tmp/foo.txt" $ encode item
-  return $ show (encode item)
-
--- getItemById :: Integer -> Handler (IO Item)
--- getItemById = \ case
---   0 -> return exampleItem
---   _ -> throwError err404
-
-readItemFromFile :: IO (Maybe Item)
-readItemFromFile = do ---"{\"itemId\":1,\"itemText\":\"some monday text\"}"
-                text <- readFile "/tmp/foo.txt"
-                return $ (decode (BL.pack $ map c2w text) :: Maybe Item) 
-
-ex1 :: Item
-ex1 = Item {
-  itemId = 1
-  , itemText = "some text"
-}
-
--- * item
-
-data Item
-  = Item {
-    itemId :: Integer,
-    itemText :: String
-  }
-  deriving (Eq, Show, Generic)
-
-instance ToJSON Item
-instance FromJSON Item
+    connPool <- initConnPool
+    let settings =
+            setPort port $
+            setBeforeMainLoop (hPutStrLn stderr
+                            ("listening on port " ++ show port)) $ defaultSettings
+    runSettings settings =<< mkApp connPool

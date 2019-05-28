@@ -39,11 +39,16 @@ dependencies:
 - base
 - servant
 - servant-server
+- servant-auth
+- servant-auth-server
+- servant-client
 - transformers
 - aeson
 - wai
 - warp
 - bytestring
+- http-client
+- containers
 
 tests:
   honesty-box-test:
