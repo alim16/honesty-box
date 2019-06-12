@@ -6,6 +6,9 @@ author:              "Author name here"
 maintainer:          "example@example.com"
 copyright:           "2019 Author name here"
 
+default-extensions:
+- OverloadedStrings
+
 extra-source-files:
 - README.md
 - ChangeLog.md
@@ -49,6 +52,9 @@ dependencies:
 - bytestring
 - http-client
 - containers
+- time
+- sqlite-simple
+#- db-notes
 
 tests:
   honesty-box-test:

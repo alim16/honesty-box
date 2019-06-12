@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, TypeFamilies, DataKinds,
-  DeriveGeneric, TypeOperators #-}
+  DeriveGeneric, TypeOperators #-} --add these to package.yaml
 
 module App where
 
