@@ -8,5 +8,5 @@ import DBstuff
 
 
 main :: IO ()
---main = run
-main = runDBstuff
+main = run
+--main = runDBstuff

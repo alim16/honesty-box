@@ -56,7 +56,6 @@ instance FromBasicAuthData AuthenticatedUser where
 
 
 -----
-
 type TestAPI = "foo" :> Capture "i" Int :> Get '[JSON] ()
                :<|> "bar" :> Get '[JSON] String
 
@@ -65,7 +64,7 @@ type TestAPIServer =
 
 type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> TestAPI
 
-----Client
+----Client ---probably not needed anymore
 testClient :: IO ()
 testClient = do
   mgr <- newManager defaultManagerSettings
