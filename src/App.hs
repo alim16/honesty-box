@@ -56,37 +56,53 @@ instance FromBasicAuthData AuthenticatedUser where
 
 
 -----
-type TestAPI = "foo" :> Capture "i" Int :> Get '[JSON] ()
-               :<|> "bar" :> Get '[JSON] String
+type ProtectedAPI =  Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :>  "foo" :> Capture "i" Int :> Get '[JSON] ()
+              -- :<|> "bar" :> Get '[JSON] String
 
-type TestAPIServer =
-    Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> TestAPI
+type Public1 = "public1" :> Get '[JSON] String
 
-type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> TestAPI
+type MyAPI = Public1 :<|> ProtectedAPI
+
+-- type TestAPIServer =
+--     Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> TestAPI
+
+type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> ProtectedAPI
 
 ----Client ---probably not needed anymore
-testClient :: IO ()
-testClient = do
-  mgr <- newManager defaultManagerSettings
-  let (foo :<|> _) = client (Proxy :: Proxy TestAPIClient)
-                     (BasicAuthData "name" "pass")
-  res <- runClientM (foo 42)
-    (mkClientEnv mgr (BaseUrl Http "localhost" port ""))
-  hPutStrLn stderr $ case res of
-    Left err -> "Error: " ++ show err
-    Right r -> "Success: " ++ show r
+-- testClient :: IO ()
+-- testClient = do
+--   mgr <- newManager defaultManagerSettings
+--   let (foo :<|> _) = client (Proxy :: Proxy TestAPIClient)
+--                      (BasicAuthData "name" "pass")
+--   res <- runClientM (foo 42)
+--     (mkClientEnv mgr (BaseUrl Http "localhost" port ""))
+--   hPutStrLn stderr $ case res of
+--     Left err -> "Error: " ++ show err
+--     Right r -> "Success: " ++ show r
 
 
 ---Server
-server :: Server TestAPIServer
-server (Authenticated user) = handleFoo :<|> handleBar
-  where
-    handleFoo :: Int -> Handler ()
-    handleFoo n = liftIO $ hPutStrLn stderr $
-      concat ["foo: ", show user, " / ", show n]
-    handleBar :: Handler String
-    handleBar = return ("hello " ++ (show user)) --testClient
-server _ = throwAll err401
+-- server :: Server TestAPIServer
+-- server (Authenticated user) = handleFoo :<|> handleBar
+--   where
+--     handleFoo :: Int -> Handler ()
+--     handleFoo n = liftIO $ hPutStrLn stderr $
+--       concat ["foo: ", show user, " / ", show n]
+--     handleBar :: Handler String
+--     handleBar = return ("hello " ++ (show user)) --testClient
+-- server _ = throwAll err401
+
+
+serverNew :: Server MyAPI
+serverNew =
+  let publicAPIHandler = return $ concat ["foo", "bar"]
+      privateAPIHandler1 (Authenticated user) n = liftIO $ hPutStrLn stderr $
+        concat ["foo: ", show user, " / ", show n]
+      privateAPIHandler1 _ _ = throwAll err401
+      --privateAPIHandler2 :: Handler String
+      -- privateAPIHandler2 (Authenticated user) = return ("hello " ++ (show user))
+     
+  in publicAPIHandler :<|> privateAPIHandler1 -- :<|> privateAPIHandler2
 
 ------
 mkApp :: Pool Connection -> IO Application
@@ -95,8 +111,8 @@ mkApp connPool = do
   let jwtCfg = defaultJWTSettings myKey
       authCfg = authCheck connPool
       cfg = jwtCfg :. defaultCookieSettings :. authCfg :. EmptyContext
-      api = Proxy :: Proxy TestAPIServer
-  pure $ serveWithContext api cfg server
+      api = Proxy :: Proxy MyAPI
+  pure $ serveWithContext api cfg serverNew
 
 
 run :: IO ()
