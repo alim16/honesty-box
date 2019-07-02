@@ -56,8 +56,8 @@ instance FromBasicAuthData AuthenticatedUser where
 
 
 -----
-type ProtectedAPI =  Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :>  "foo" :> Capture "i" Int :> Get '[JSON] ()
-              -- :<|> "bar" :> Get '[JSON] String
+type ProtectedAPI = Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> ("users" :> Get '[JSON] () :<|> 
+    "users" :> Capture "i" Int :> Get '[JSON] String)
 
 type Public1 = "public1" :> Get '[JSON] String
 
@@ -96,13 +96,25 @@ type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> ProtectedAPI
 serverNew :: Server MyAPI
 serverNew =
   let publicAPIHandler = return $ concat ["foo", "bar"]
-      privateAPIHandler1 (Authenticated user) n = liftIO $ hPutStrLn stderr $
-        concat ["foo: ", show user, " / ", show n]
-      privateAPIHandler1 _ _ = throwAll err401
+
+      privateHandler3  (Authenticated user) = first :<|> second
+        where
+          first :: Handler ()
+          first =  liftIO $ hPutStrLn stderr $
+            concat ["foo: ", show user, " / "]
+          second ::  Int -> Handler String
+          second n = return $ concat ["hello ", (show user), show n]
+      privateHandler3 _ = throwAll err401
+
       --privateAPIHandler2 :: Handler String
-      -- privateAPIHandler2 (Authenticated user) = return ("hello " ++ (show user))
+      ----privateAPIHandler2 (Authenticated user) = return ("hello " ++ (show user))
+
+     -- privateAPIHandler1 ::  Int -> Handler ()
+      -- privateAPIHandler1 (Authenticated user) n = liftIO $ hPutStrLn stderr $
+      --   concat ["foo: ", show user, " / ", show n]
+      -- privateAPIHandler1 _ _ = throwAll err401
      
-  in publicAPIHandler :<|> privateAPIHandler1 -- :<|> privateAPIHandler2
+  in publicAPIHandler :<|> privateHandler3 -- privateAPIHandler2 :<|> privateAPIHandler1
 
 ------
 mkApp :: Pool Connection -> IO Application
