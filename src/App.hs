@@ -14,8 +14,10 @@ import Servant.Client
 import Servant.Auth as SA
 import Servant.Auth.Server as SAS
 import Control.Monad.IO.Class (liftIO)
-import Data.Map as M
+import Data.Map as M --remove later
 import Data.ByteString (ByteString)
+import DBstuff
+--import Data.Pool -- to be used later for dbconnection
 
 port :: Int
 port = 3001
@@ -23,8 +25,8 @@ port = 3001
 -----
 
 data AuthenticatedUser = AUser { auID :: Int
-                               , auOrgID :: Int
-                               } deriving (Show, Generic)
+                               , role :: Int --to decide access rights
+                               } deriving (Show, Generic) --move to myTypes file
 
 instance ToJSON AuthenticatedUser
 instance FromJSON AuthenticatedUser
@@ -47,6 +49,8 @@ authCheck :: Pool Connection
           -> BasicAuthData
           -> IO (AuthResult AuthenticatedUser)
 authCheck connPool (BasicAuthData login password) = pure $
+    --add call to  a withResource function here, which takes user and pass and returns :: Maybe AuthenticatedUser
+    -- that's what the Map.lookup does
     maybe SAS.Indefinite Authenticated $ M.lookup (login, password) connPool
 
 type instance BasicAuthCfg = BasicAuthData -> IO (AuthResult AuthenticatedUser)
@@ -66,36 +70,12 @@ type MyAPI = Public1 :<|> ProtectedAPI
 -- type TestAPIServer =
 --     Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> TestAPI
 
-type TestAPIClient = S.BasicAuth "test" AuthenticatedUser :> ProtectedAPI
-
-----Client ---probably not needed anymore
--- testClient :: IO ()
--- testClient = do
---   mgr <- newManager defaultManagerSettings
---   let (foo :<|> _) = client (Proxy :: Proxy TestAPIClient)
---                      (BasicAuthData "name" "pass")
---   res <- runClientM (foo 42)
---     (mkClientEnv mgr (BaseUrl Http "localhost" port ""))
---   hPutStrLn stderr $ case res of
---     Left err -> "Error: " ++ show err
---     Right r -> "Success: " ++ show r
-
-
----Server
--- server :: Server TestAPIServer
--- server (Authenticated user) = handleFoo :<|> handleBar
---   where
---     handleFoo :: Int -> Handler ()
---     handleFoo n = liftIO $ hPutStrLn stderr $
---       concat ["foo: ", show user, " / ", show n]
---     handleBar :: Handler String
---     handleBar = return ("hello " ++ (show user)) --testClient
--- server _ = throwAll err401
-
 
 serverNew :: Server MyAPI
 serverNew =
-  let publicAPIHandler = return $ concat ["foo", "bar"]
+  let publicAPIHandler = do
+        liftIO $ printUsers --dbfunction to print users
+        return $ concat ["foo", "bar"]
 
       privateHandler3  (Authenticated user) = first :<|> second
         where
@@ -105,14 +85,6 @@ serverNew =
           second ::  Int -> Handler String
           second n = return $ concat ["hello ", (show user), show n]
       privateHandler3 _ = throwAll err401
-
-      --privateAPIHandler2 :: Handler String
-      ----privateAPIHandler2 (Authenticated user) = return ("hello " ++ (show user))
-
-     -- privateAPIHandler1 ::  Int -> Handler ()
-      -- privateAPIHandler1 (Authenticated user) n = liftIO $ hPutStrLn stderr $
-      --   concat ["foo: ", show user, " / ", show n]
-      -- privateAPIHandler1 _ _ = throwAll err401
      
   in publicAPIHandler :<|> privateHandler3 -- privateAPIHandler2 :<|> privateAPIHandler1
 

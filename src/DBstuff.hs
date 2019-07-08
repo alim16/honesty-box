@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DBstuff where
 
 
@@ -5,14 +7,22 @@ import Control.Applicative
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromRow --probably removable, since it's used mytypes.hs
 import Data.Time
+import Turtle
 
 import MyTypes
 
+
 runDBstuff :: IO ()
-runDBstuff = print $ show $ User 1 "someName"
+runDBstuff = do
+    dbInit
+    return ()
+-- runDBstuff = printUsers --print $ show $ User 1 "someName"
 
 myDB :: String
 myDB = "../tools.db"
+
+dbInit :: IO ExitCode
+dbInit = proc "sqlite3" [fromString(myDB), dbInitScript] empty
 
 
 withConn :: String -> (Connection -> IO ()) -> IO ()
@@ -41,3 +51,17 @@ printUsers = withConn myDB $
             resp <- query_ conn "SELECT * FROM users;" :: IO [User]
             mapM_ print resp
 
+
+dbInitScript :: Text
+dbInitScript = 
+    "DROP TABLE IF EXISTS checkedout;\
+    \DROP TABLE IF EXISTS tools;\
+    \DROP TABLE IF EXISTS users;\
+    \CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT);\
+    \CREATE TABLE tools (id INTEGER PRIMARY KEY,name TEXT,description TEXT,lastReturned TEXT,timesBorrowed INTEGER);\
+    \CREATE TABLE checkedout (user_id INTEGER,tool_id INTEGER);\
+    \INSERT INTO users (username) VALUES ('willkurt');\
+    \INSERT INTO tools (name,description,lastReturned,timesBorrowed)\
+    \VALUES ('hammer','hits stuff','2017-01-01',0);\
+    \INSERT INTO tools (name,description,lastReturned,timesBorrowed)\
+    \VALUES ('saw','cuts stuff','2017-01-01',0);"

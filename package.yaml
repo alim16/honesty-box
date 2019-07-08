@@ -54,6 +54,7 @@ dependencies:
 - containers
 - time
 - sqlite-simple
+- turtle
 #- db-notes
 
 tests:

@@ -15,6 +15,7 @@ data Tool = Tool
 data User = User
     { userId :: Int
     , userName :: String
+    --need to add password field
     }
 
 instance FromRow User where

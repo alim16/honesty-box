@@ -8,5 +8,6 @@ import DBstuff
 
 
 main :: IO ()
-main = run
---main = runDBstuff
+main = do
+  runDBstuff --creates new sqlite database
+  run
