@@ -55,6 +55,7 @@ dependencies:
 - time
 - sqlite-simple
 - turtle
+- resource-pool
 #- db-notes
 
 tests:

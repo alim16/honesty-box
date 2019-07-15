@@ -1,8 +1,26 @@
+{-# LANGUAGE DeriveGeneric #-} 
+
 module MyTypes where
+
+import Data.Aeson
+import GHC.Generics
 import Data.Time
 import Database.SQLite.Simple.FromRow
 
+import Servant.Auth.Server (FromJWT, ToJWT)
+
 --type Day = utctDay <$> getCurrentTime
+
+instance ToJSON AuthenticatedUser
+instance FromJSON AuthenticatedUser
+instance ToJWT AuthenticatedUser
+instance FromJWT AuthenticatedUser
+
+data AuthenticatedUser = AUser { auID :: Int
+                               , roleID :: Int --to decide access rights, 1 is admin, 2 user
+                               } deriving (Show, Generic) --move to myTypes file
+
+
 
 data Tool = Tool
     { toolId :: Int
@@ -14,12 +32,17 @@ data Tool = Tool
 
 data User = User
     { userId :: Int
-    , userName :: String
-    --need to add password field
+    , firstName :: String
+    , lastName :: String
+    , password :: String
+    , roleId :: Int
     }
 
 instance FromRow User where
     fromRow = User <$> field
+                   <*> field
+                   <*> field
+                   <*> field
                    <*> field
 
 instance FromRow Tool where
@@ -33,7 +56,7 @@ instance FromRow Tool where
 instance Show User where
     show user = mconcat [ show $ userId user
                         , "). "
-                        , userName user]
+                        , concat [firstName user," ",lastName user]]
 
 
 instance Show Tool where

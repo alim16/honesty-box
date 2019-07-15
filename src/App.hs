@@ -3,8 +3,7 @@
 
 module App where
 
-import Data.Aeson
-import GHC.Generics
+
 import Data.Proxy
 import System.IO
 import Network.HTTP.Client (newManager, defaultManagerSettings)
@@ -17,6 +16,9 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Map as M --remove later
 import Data.ByteString (ByteString)
 import DBstuff
+import Data.Pool
+import Database.SQLite.Simple (Connection, open, close)
+import MyTypes (AuthenticatedUser)
 --import Data.Pool -- to be used later for dbconnection
 
 port :: Int
@@ -24,34 +26,44 @@ port = 3001
 
 -----
 
-data AuthenticatedUser = AUser { auID :: Int
-                               , role :: Int --to decide access rights
-                               } deriving (Show, Generic) --move to myTypes file
 
-instance ToJSON AuthenticatedUser
-instance FromJSON AuthenticatedUser
-instance ToJWT AuthenticatedUser
-instance FromJWT AuthenticatedUser
+
+
 
 -----
 
 type Login      = ByteString
 type Password   = ByteString
-type DB         = Map (Login, Password) AuthenticatedUser
-type Connection = DB
-type Pool a     = a
+type DBConnectionString = ByteString
+-- type DB         = Map (Login, Password) AuthenticatedUser
+-- type Connection = DB
+--type Pool a     = a
 
-initConnPool :: IO (Pool Connection)
-initConnPool = pure $ fromList [ (("user", "pass"), AUser 1 1)
-                               , (("user2", "pass2"), AUser 2 1) ]
+initConnPool :: String -> IO (Pool Connection)
+initConnPool constr = 
+  createPool (open constr)
+            close
+            2 -- stripes
+            60 -- unused connections are kept open for a minute
+            10 -- max. 10 connections open per stripe
+
+
+-- initConnPool = pure $ fromList [ (("user", "pass"), AUser 1 1)
+--                                , (("user2", "pass2"), AUser 2 1) ]
 
 authCheck :: Pool Connection
           -> BasicAuthData
           -> IO (AuthResult AuthenticatedUser)
-authCheck connPool (BasicAuthData login password) = pure $
+authCheck connPool (BasicAuthData login password) = do
+  pure $ maybe SAS.Indefinite Authenticated $ (getUser login password connPool)
+  -- liftIO . withResource conns $ \conn ->
+  --   execute conn
+  --           "INSERT INTO messages VALUES (?)"
+  --           (Only msg)
+  
     --add call to  a withResource function here, which takes user and pass and returns :: Maybe AuthenticatedUser
     -- that's what the Map.lookup does
-    maybe SAS.Indefinite Authenticated $ M.lookup (login, password) connPool
+    --maybe SAS.Indefinite Authenticated $ M.lookup (login, password) connPool
 
 type instance BasicAuthCfg = BasicAuthData -> IO (AuthResult AuthenticatedUser)
 
@@ -101,7 +113,7 @@ mkApp connPool = do
 
 run :: IO ()
 run = do
-    connPool <- initConnPool
+    connPool <- initConnPool "../test2"
     let settings =
             setPort port $
             setBeforeMainLoop (hPutStrLn stderr
