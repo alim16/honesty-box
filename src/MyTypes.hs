@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-} 
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-} 
 
 module MyTypes where
 
@@ -6,6 +6,7 @@ import Data.Aeson
 import GHC.Generics
 import Data.Time
 import Database.SQLite.Simple.FromRow
+import Data.ByteString (ByteString)
 
 import Servant.Auth.Server (FromJWT, ToJWT)
 
@@ -35,11 +36,13 @@ data User = User
     , firstName :: String
     , lastName :: String
     , password :: String
+    , email :: String
     , roleId :: Int
     }
 
 instance FromRow User where
     fromRow = User <$> field
+                   <*> field
                    <*> field
                    <*> field
                    <*> field

@@ -10,8 +10,11 @@ import Data.Time
 import Turtle
 import GHC.Generics
 import Data.Aeson
-import Data.Pool (Pool)
-import Data.ByteString (ByteString)
+import Data.Pool (Pool, withResource)
+import Data.ByteString (ByteString, unpack, pack)
+import Data.Char (chr,ord)
+
+import qualified Data.ByteString as BS
 
 import MyTypes
 
@@ -24,7 +27,7 @@ runDBstuff = do
 -- runDBstuff = printUsers --print $ show $ User 1 "someName"
 
 myDB :: String
-myDB = "../tools.db"
+myDB = "../test2.db"
 
 dbInit :: IO ExitCode
 dbInit = proc "sqlite3" [fromString(myDB), dbInitScript] empty
@@ -43,18 +46,18 @@ addUser username = withConn myDB $
             (Only username)
         print "retrieving user"
 
-getUser :: ByteString -> ByteString -> Pool Connection -> Maybe AuthenticatedUser
+getUser :: ByteString -> ByteString -> Pool Connection -> IO (Maybe AuthenticatedUser)
 getUser name pass conn = do
-    -- withConn conn $
-    --     \conn -> do
-    --         resp <- query_ conn "SELECT * FROM users;" :: IO [User]
-    --         mapM_ print resp
-    return (AUser 1 1)
-        
-    -- \conn -> do
-    --     execute conn "SELECT * FROM users WHERE (username) values (?,?)"
-    --         (Only username)
-    --     print "user added"
+       user <- withResource conn $
+            \conn -> do
+                returnedUsers <- liftIO $ query conn "SELECT * from users WHERE lastName = (?)"
+                    (Only (bytesToString name)) :: IO [User]
+                return (head returnedUsers)
+       return (Just (AUser (userId user) 1)) --change to return nothing if user not found or password incorrect
+ 
+bytesToString :: ByteString -> String
+bytesToString bytes = map (chr . fromEnum) $ BS.unpack bytes
+
 
 checkout :: Int -> Int -> IO ()
 checkout userId toolId = withConn myDB $
@@ -75,11 +78,12 @@ dbInitScript =
     "DROP TABLE IF EXISTS checkedout;\
     \DROP TABLE IF EXISTS tools;\
     \DROP TABLE IF EXISTS users;\
-    \CREATE TABLE users (id INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, password TEXT, roleId INTEGER);\
+    \CREATE TABLE users (id INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, password TEXT, email Text NOT NULL UNIQUE,roleId INTEGER);\
     \CREATE TABLE tools (id INTEGER PRIMARY KEY,name TEXT,description TEXT,lastReturned TEXT,timesBorrowed INTEGER);\
     \CREATE TABLE checkedout (user_id INTEGER,tool_id INTEGER);\
-    \INSERT INTO users (firstName, lastName, password, roleId) VALUES ('will', 'kurt', 'secret', 1);\
+    \INSERT INTO users (firstName, lastName, password, email , roleId) VALUES ('will', 'kurt', 'secret','kurt@test.com', 1);\
     \INSERT INTO tools (name,description,lastReturned,timesBorrowed)\
     \VALUES ('hammer','hits stuff','2017-01-01',0);\
     \INSERT INTO tools (name,description,lastReturned,timesBorrowed)\
-    \VALUES ('saw','cuts stuff','2017-01-01',0);"
+    \VALUES ('saw','cuts stuff','2017-01-01',0);\
+    \SELECT * from users WHERE lastName = 'kurt';"

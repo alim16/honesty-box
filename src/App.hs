@@ -55,11 +55,10 @@ authCheck :: Pool Connection
           -> BasicAuthData
           -> IO (AuthResult AuthenticatedUser)
 authCheck connPool (BasicAuthData login password) = do
-  pure $ maybe SAS.Indefinite Authenticated $ (getUser login password connPool)
-  -- liftIO . withResource conns $ \conn ->
-  --   execute conn
-  --           "INSERT INTO messages VALUES (?)"
-  --           (Only msg)
+  user <- (getUser login password connPool)
+  print (show user)
+  return $ maybe SAS.Indefinite Authenticated $ user
+
   
     --add call to  a withResource function here, which takes user and pass and returns :: Maybe AuthenticatedUser
     -- that's what the Map.lookup does
@@ -78,9 +77,6 @@ type ProtectedAPI = Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> ("users" :
 type Public1 = "public1" :> Get '[JSON] String
 
 type MyAPI = Public1 :<|> ProtectedAPI
-
--- type TestAPIServer =
---     Auth '[SA.JWT, SA.BasicAuth] AuthenticatedUser :> TestAPI
 
 
 serverNew :: Server MyAPI
@@ -113,7 +109,7 @@ mkApp connPool = do
 
 run :: IO ()
 run = do
-    connPool <- initConnPool "../test2"
+    connPool <- initConnPool "../test2.db"
     let settings =
             setPort port $
             setBeforeMainLoop (hPutStrLn stderr
