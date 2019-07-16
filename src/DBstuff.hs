@@ -46,14 +46,16 @@ addUser username = withConn myDB $
             (Only username)
         print "retrieving user"
 
+--curl -u kurt@test.com:password -i -H 'Accept:application/json' http://localhost:3001/users/1
+-- use base64 encoding for user credentials when requesting from frontend
 getUser :: ByteString -> ByteString -> Pool Connection -> IO (Maybe AuthenticatedUser)
-getUser name pass conn = do
+getUser email pass conn = do
        user <- withResource conn $
             \conn -> do
-                returnedUsers <- liftIO $ query conn "SELECT * from users WHERE lastName = (?)"
-                    (Only (bytesToString name)) :: IO [User]
+                returnedUsers <- liftIO $ query conn "SELECT * from users WHERE email = (?) AND password = (?)"
+                    (bytesToString email, bytesToString pass) :: IO [User]
                 return (head returnedUsers)
-       return (Just (AUser (userId user) 1)) --change to return nothing if user not found or password incorrect
+       return (Just (AUser (userId user) (roleId user))) --change to return nothing if user not found or password incorrect
  
 bytesToString :: ByteString -> String
 bytesToString bytes = map (chr . fromEnum) $ BS.unpack bytes

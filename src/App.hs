@@ -24,13 +24,6 @@ import MyTypes (AuthenticatedUser)
 port :: Int
 port = 3001
 
------
-
-
-
-
-
------
 
 type Login      = ByteString
 type Password   = ByteString
@@ -46,10 +39,6 @@ initConnPool constr =
             2 -- stripes
             60 -- unused connections are kept open for a minute
             10 -- max. 10 connections open per stripe
-
-
--- initConnPool = pure $ fromList [ (("user", "pass"), AUser 1 1)
---                                , (("user2", "pass2"), AUser 2 1) ]
 
 authCheck :: Pool Connection
           -> BasicAuthData
