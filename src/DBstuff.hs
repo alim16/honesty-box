@@ -18,6 +18,7 @@ import qualified Data.ByteString as BS
 
 import MyTypes
 
+--https://rundis.github.io/blog/2016/haskel_elm_spa_part2.html#_adding_cors_support
 
 
 runDBstuff :: IO ()
@@ -50,6 +51,8 @@ addUser username = withConn myDB $
 -- use base64 encoding for user credentials when requesting from frontend
 getUser :: ByteString -> ByteString -> Pool Connection -> IO (Maybe AuthenticatedUser)
 getUser email pass conn = do
+       liftIO $ printUsers
+       liftIO $ print email
        user <- withResource conn $
             \conn -> do
                 returnedUsers <- liftIO $ query conn "SELECT * from users WHERE email = (?) AND password = (?)"
@@ -59,7 +62,6 @@ getUser email pass conn = do
  
 bytesToString :: ByteString -> String
 bytesToString bytes = map (chr . fromEnum) $ BS.unpack bytes
-
 
 checkout :: Int -> Int -> IO ()
 checkout userId toolId = withConn myDB $

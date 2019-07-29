@@ -49,6 +49,7 @@ dependencies:
 - aeson
 - wai
 - warp
+- wai-cors
 - bytestring
 - http-client
 - containers

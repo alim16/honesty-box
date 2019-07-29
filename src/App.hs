@@ -19,7 +19,11 @@ import DBstuff
 import Data.Pool
 import Database.SQLite.Simple (Connection, open, close)
 import MyTypes (AuthenticatedUser)
+import Network.Wai.Middleware.Cors
+import Network.Wai --required for type Middleware
+import qualified Data.ByteString.Char8 as C
 --import Data.Pool -- to be used later for dbconnection
+
 
 port :: Int
 port = 3001
@@ -86,6 +90,24 @@ serverNew =
   in publicAPIHandler :<|> privateHandler3 -- privateAPIHandler2 :<|> privateAPIHandler1
 
 ------
+resourcePolicy :: CorsResourcePolicy   
+resourcePolicy =
+    CorsResourcePolicy
+        { --corsOrigins = Nothing -- gives you /*
+        corsOrigins = Just (["http://localhost:3000"],True)
+        , corsMethods = ["OPTIONS","GET", "POST", "PUT", "DELETE", "HEAD"]
+        , corsRequestHeaders = ["Authorization", "Content-Type"]--removed this from the list "Access-Control-Request-Headers"
+        , corsExposedHeaders = Nothing
+        , corsMaxAge = Nothing
+        , corsVaryOrigin = False
+        , corsRequireOrigin = False
+        , corsIgnoreFailures = False
+        }
+
+myCors :: Middleware
+myCors = cors $ const (Just resourcePolicy)
+
+
 mkApp :: Pool Connection -> IO Application
 mkApp connPool = do
   myKey <- generateKey
@@ -93,7 +115,7 @@ mkApp connPool = do
       authCfg = authCheck connPool
       cfg = jwtCfg :. defaultCookieSettings :. authCfg :. EmptyContext
       api = Proxy :: Proxy MyAPI
-  pure $ serveWithContext api cfg serverNew
+  pure $ myCors(serveWithContext api cfg serverNew)
 
 
 run :: IO ()
